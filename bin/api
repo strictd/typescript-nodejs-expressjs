@@ -1,0 +1,121 @@
+#!/usr/bin/env node
+"use strict";
+
+//module dependencies.
+let app = require("../server/api/server"),
+      debug = require("debug")("express:server"),
+      http = require("http")
+;
+
+// HTTP Server Settings
+let ip = process.env.IP || '0.0.0.0',
+      port = normalizePort(process.env.PORT || 3080);
+let server, sslip, sslport, sslserver;
+
+app.set('port', port);
+app.set('ip', ip);
+// HTTPS Server
+if (process.env.USESSL === 1) {
+  // HTTPS Settings
+  sslip = process.env.SSLIP || '0.0.0.0';
+  sslport = normalizePort(process.env.SSLPORT || 3443);
+  app.set('sslport', port);
+  app.set('sslip', sslip);
+
+  // SSL Keys
+  let options = {
+    key: fs.readFileSync('key.pem'),
+    cert: fs.readFileSync('cert.pem')
+  };
+
+  // Start SSL Server
+  sslserver = https.createServer(options, app);
+  sslserver.listen(sslport, sslip, function (err) {
+    console.log('listening in https://'+sslip+':' + sslport);
+  });
+
+  sslserver.on("error", onError);
+  sslserver.on("listening", onListening);
+}
+
+// Start HTTP if SSL isn't active or on non-conflicting ports
+if (!process.env.USESSL || port != sslport) {
+  server = http.createServer(app);
+  server.listen(port, ip, function (err) {
+    console.log('listening in http://' + ip + ':' + port);
+  });
+
+  server.on("error", onError);
+  server.on("listening", onListening);
+}
+
+process.on('uncaughtException', function (exception) {
+  console.log(exception);
+});
+
+// Redirect CTRL-C Stops to Exit Normally
+process.on('SIGINT', function() {
+  process.exit(0);
+});
+
+// Clean up from running processes
+process.on("exit", function() {
+  console.log("\nShutting Down..\n");
+});
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+function onError(error) {
+  if (error.syscall !== "listen") {
+    throw error;
+  }
+
+  var bind = typeof port === "string"
+    ? "Pipe " + port
+    : "Port " + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case "EACCES":
+      console.error(bind + " requires elevated privileges");
+      process.exit(1);
+      break;
+    case "EADDRINUSE":
+      console.error(bind + " is already in use");
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === "string"
+    ? "pipe " + addr
+    : "port " + addr.port;
+  debug("Listening on " + bind);
+}
